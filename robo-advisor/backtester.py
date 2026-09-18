@@ -431,3 +431,12 @@ if __name__ == "__main__":
     midpoint = all_dates[len(all_dates) // 2] if all_dates else None
 
     run_advanced_backtest(50_000_000, 20, midpoint, num_strategy_trials=1)
+
+def run_backtest():
+    """
+    Main entry point for running historical backtest.
+    """
+    pass
+
+if __name__ == "__main__":
+    run_backtest()
