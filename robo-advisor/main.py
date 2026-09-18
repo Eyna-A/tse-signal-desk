@@ -146,35 +146,36 @@ def run_full_pipeline():
     from train_model import train_lightgbm_with_purged_cv
     from live_predictor import generate_live_predictions
     from portfolio_optimizer import optimize_portfolio
+    from backtester import run_backtest
 
     try:
         logger.info("=" * 70)
-        logger.info("Stage 1/6: Raw data ingestion and cleaning")
+        logger.info("Stage 1/7: Raw data ingestion and cleaning")
         logger.info("=" * 70)
         run_pipeline(TARGET_TICKERS)
 
         logger.info("=" * 70)
-        logger.info("Stage 2/6: Feature engineering and labeling")
+        logger.info("Stage 2/7: Feature engineering and labeling")
         logger.info("=" * 70)
         run_feature_engineering_pipeline()
 
         logger.info("=" * 70)
-        logger.info("Stage 3/6: Model training (Purged K-Fold CV)")
+        logger.info("Stage 3/7: Model training (Purged K-Fold CV)")
         logger.info("=" * 70)
         train_lightgbm_with_purged_cv()
 
         logger.info("=" * 70)
-        logger.info("Stage 4/6: Live prediction generation")
+        logger.info("Stage 4/7: Live prediction generation")
         logger.info("=" * 70)
         ranking_table = generate_live_predictions()
 
         logger.info("=" * 70)
-        logger.info("Stage 5/6: Portfolio optimization (Medium Risk)")
+        logger.info("Stage 5/7: Portfolio optimization (Medium Risk)")
         logger.info("=" * 70)
         portfolio_result = optimize_portfolio(capital=50_000_000, risk_appetite='medium', time_horizon='mid')
 
         logger.info("=" * 70)
-        logger.info("Stage 6/6: Exporting data for React dashboard")
+        logger.info("Stage 6/7: Exporting data for React dashboard")
         logger.info("=" * 70)
         try:
             export_dashboard_data(ranking_table, portfolio_result)
@@ -182,8 +183,17 @@ def run_full_pipeline():
         except Exception as export_err:
             logger.error(f"⚠️ Dashboard export failed (core trading pipeline execution completed): {export_err}")
 
-        logger.info("✅ Full pipeline completed successfully.")
-        logger.info("ℹ️ Run backtester.py separately with a designated start_date for historical backtesting.")
+        logger.info("=" * 70)
+        logger.info("Stage 7/7: Historical Backtesting")
+        logger.info("=" * 70)
+        try:
+            run_backtest()
+            export_dashboard_data(ranking_table, portfolio_result)
+            logger.info("✅ Backtest completed and dashboard metrics refreshed.")
+        except Exception as backtest_err:
+            logger.error(f"⚠️ Backtest stage failed: {backtest_err}")
+
+        logger.info("✅ Full pipeline (including backtest) completed successfully.")
 
     except Exception as e:
         logger.error(f"❌ Pipeline terminated with error: {e}")
