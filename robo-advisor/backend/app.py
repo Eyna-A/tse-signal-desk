@@ -78,36 +78,44 @@ def get_rankings():
 
     df = pd.read_excel(LIVE_PREDICTIONS_PATH)
 
-    # Check for expected column structures (handles English and Persian column naming gracefully)
-    symbol_col = 'Ticker' if 'Ticker' in df.columns else ('نماد' if 'نماد' in df.columns else None)
-    price_col = 'Close Price' if 'Close Price' in df.columns else ('قیمت پایانی' if 'قیمت پایانی' in df.columns else None)
-    score_col = 'Alpha Score' if 'Alpha Score' in df.columns else ('امتیاز خرید (Alpha Score)' if 'امتیاز خرید (Alpha Score)' in df.columns else None)
-    change_col = 'Change %' if 'Change %' in df.columns else ('درصد تغییر' if 'درصد تغییر' in df.columns else None)
-    drop_col = 'Drop Prob (Class 0)' if 'Drop Prob (Class 0)' in df.columns else ('احتمال ریزش/عقب‌ماندگی (کلاس ۰)' if 'احتمال ریزش/عقب‌ماندگی (کلاس ۰)' in df.columns else None)
-    neutral_col = 'Neutral Prob (Class 1)' if 'Neutral Prob (Class 1)' in df.columns else ('احتمال خنثی/همگام بازار (کلاس ۱)' if 'احتمال خنثی/همگام بازار (کلاس ۱)' in df.columns else None)
-    growth_col = 'Growth Prob (Class 2)' if 'Growth Prob (Class 2)' in df.columns else ('احتمال رشد شارپ > ۵٪ (کلاس ۲)' if 'احتمال رشد شارپ > ۵٪ (کلاس ۲)' in df.columns else None)
+    symbol_col = next((c for c in df.columns if any(k in str(c) for k in ['Ticker', 'symbol', 'نماد', 'Symbol'])), None)
+    price_col = next((c for c in df.columns if any(k in str(c) for k in ['Close Price', 'price', 'قیمت پایانی', 'Close', 'Price'])), None)
+    score_col = next((c for c in df.columns if any(k in str(c) for k in ['Alpha Score', 'alpha_score', 'امتیاز خرید', 'Alpha'])), None)
+    
+    change_col = next((c for c in df.columns if any(k in str(c) for k in ['Change %', 'change_percent', 'درصد تغییر', 'Change', 'Pct', 'بازده'])), None)
+    
+    # ستون‌های احتمالات بر اساس شماره کلاس یا کلمات کلیدی
+    drop_col = next((c for c in df.columns if any(k in str(c) for k in ['Class 0', 'کلاس ۰', 'کلاس 0', 'Drop', 'ریزش'])), None)
+    neutral_col = next((c for c in df.columns if any(k in str(c) for k in ['Class 1', 'کلاس ۱', 'کلاس 1', 'Neutral', 'خنثی'])), None)
+    growth_col = next((c for c in df.columns if any(k in str(c) for k in ['Class 2', 'کلاس ۲', 'کلاس 2', 'Growth', 'رشد'])), None)
 
-    if not all([symbol_col, price_col, score_col, change_col, drop_col, neutral_col, growth_col]):
-        raise HTTPException(status_code=500, detail="Required prediction columns were not found in data frame.")
+    if not symbol_col or not price_col or not score_col:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Essential columns missing in Excel. Columns present: {list(df.columns)}"
+        )
 
-    probs = df[[drop_col, neutral_col, growth_col]].values
-    predicted_class = np.argmax(probs, axis=1)
+    has_probs = drop_col and neutral_col and growth_col
+    if has_probs:
+        probs = df[[drop_col, neutral_col, growth_col]].fillna(0.0).values
+        predicted_class = np.argmax(probs, axis=1)
+    else:
+        predicted_class = [1] * len(df)
 
-    stale_col = 'Is Stale' if 'Is Stale' in df.columns else 'داده قدیمی / مشکوک به توقف نماد'
-    has_stale_col = stale_col in df.columns
+    stale_col = next((c for c in df.columns if any(k in str(c) for k in ['Stale', 'قدیمی', 'توقف'])), None)
 
     out = []
     for i, row in df.iterrows():
         out.append({
-            "symbol": row[symbol_col],
-            "alpha_score": round(float(row[score_col]), 2),
+            "symbol": str(row[symbol_col]),
+            "alpha_score": round(float(row[score_col]), 2) if pd.notnull(row[score_col]) else 0.0,
             "predicted_class": int(predicted_class[i]),
-            "price": int(row[price_col]),
-            "change_percent": float(row[change_col]),
-            "drop_prob": float(row[drop_col]),
-            "neutral_prob": float(row[neutral_col]),
-            "growth_prob": float(row[growth_col]),
-            "is_stale": bool(row[stale_col]) if has_stale_col else False,
+            "price": int(row[price_col]) if pd.notnull(row[price_col]) else 0,
+            "change_percent": round(float(row[change_col]), 2) if change_col and pd.notnull(row[change_col]) else 0.0,
+            "drop_prob": round(float(row[drop_col]), 4) if drop_col and pd.notnull(row[drop_col]) else 0.0,
+            "neutral_prob": round(float(row[neutral_col]), 4) if neutral_col and pd.notnull(row[neutral_col]) else 0.0,
+            "growth_prob": round(float(row[growth_col]), 4) if growth_col and pd.notnull(row[growth_col]) else 0.0,
+            "is_stale": bool(row[stale_col]) if stale_col and pd.notnull(row[stale_col]) else False,
         })
 
     return out
@@ -241,19 +249,19 @@ def post_portfolio_optimize(req: OptimizeRequest):
 
     weights = {}
     for _, row in allocation_df.iterrows():
-        # Safely extract weight column checking both English and Persian keys
         weight_val = row.get('Total Portfolio Weight') or row.get('وزن از کل سبد') or '0%'
         pct_str = str(weight_val).replace('%', '').strip()
         
-        symbol_key = row.get('Ticker') or row.get('نماد') or 'Unknown'
+        symbol_key = str(row.get('Ticker') or row.get('نماد') or 'Unknown')
         weights[symbol_key] = round(float(pct_str) / 100.0, 4)
 
     bt = load_backtest_metrics() or {}
+    fixed_income_weight = weights.get(FIXED_INCOME_KEY, weights.get("صندوق درآمد ثابت", 0.0))
     metrics = {
         "total_return": bt.get("total_return"),
         "sharpe_ratio": bt.get("sharpe_ratio"),
         "max_drawdown": bt.get("max_drawdown"),
-        "risk_exposure": round(1 - weights.get(FIXED_INCOME_KEY, weights.get("صندوق درآمد ثابت", 0.0)), 4),
+        "risk_exposure": round(1 - fixed_income_weight, 4),
     }
 
     return {"portfolio_weights": weights, "metrics": metrics}
