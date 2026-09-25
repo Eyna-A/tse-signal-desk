@@ -1,0 +1,119 @@
+TSE SIGNAL DESK
+RESEARCH-ONLY NON-COMMERCIAL LICENSE
+
+Copyright (c) 2026 Eyna Shabani
+
+1. GRANT OF PERMISSION
+
+Permission is hereby granted, free of charge, to any individual
+researcher, student, academic institution, or non-profit organization
+to use, copy, modify, study, and distribute this software solely for
+non-commercial research, academic, and educational purposes, subject
+to the conditions of this License.
+
+2. PROHIBITED USE
+
+The following uses are NOT permitted without prior written permission
+from the copyright holder:
+
+a) Any commercial use of the software or any modified version.
+
+b) Use of the software by a company, corporation, commercial
+organization, or other for-profit entity, including internal research,
+testing, evaluation, development, or experimentation.
+
+c) Incorporating the software or any substantial portion of it into
+a commercial product, service, platform, or proprietary system.
+
+d) Using the software to provide a paid service, commercial API,
+commercial data product, or other revenue-generating service.
+
+e) Selling, licensing, sublicensing, or otherwise commercially
+exploiting the software or derivative works.
+
+3. RESEARCH AND EDUCATIONAL USE
+
+Permitted users may:
+
+a) Run the software for research and educational purposes.
+
+b) Study and analyze the source code.
+
+c) Modify the source code for research or educational purposes.
+
+d) Publish academic research, papers, experiments, benchmarks, and
+other scholarly work based on the software, provided that appropriate
+credit is given.
+
+e) Share modified versions for non-commercial research or educational
+purposes, provided that this License remains attached.
+
+4. ATTRIBUTION
+
+Any permitted copy, distribution, or modified version of the software
+must retain:
+
+* The original copyright notice;
+* A copy of this License; and
+* Clear attribution to the original project and author.
+
+5. DERIVATIVE WORKS
+
+Modified versions of this software may be created and distributed
+solely for permitted non-commercial research or educational purposes.
+
+Any distributed modified version must clearly indicate that it has
+been modified and must retain this License and the original copyright
+notice.
+
+6. NO COMMERCIAL RIGHTS
+
+Nothing in this License grants permission to use the software for
+commercial purposes.
+
+Any commercial use requires separate written permission from the
+copyright holder.
+
+The copyright holder may, at their sole discretion, grant additional
+commercial permissions under a separate agreement.
+
+7. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+NON-INFRINGEMENT.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE,
+INCLUDING DIRECT, INDIRECT, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL
+DAMAGES.
+
+8. THIRD-PARTY COMPONENTS
+
+This License applies only to the original code and materials
+copyrighted by the author.
+
+Third-party libraries, datasets, models, APIs, and other components
+included with or used by the project remain subject to their own
+respective licenses and terms.
+
+Users are responsible for complying with all applicable third-party
+licenses and terms.
+
+9. TERMINATION
+
+Any rights granted under this License automatically terminate if the
+recipient violates its terms.
+
+Upon termination, the recipient must cease all use, distribution, and
+modification of the software unless separate written permission has
+been obtained from the copyright holder.
+
+10. CONTACT
+
+For permission for commercial use or other uses not covered by this
+License, contact the copyright holder through the contact information
+provided in the project's repository.
+
+END OF LICENSE
