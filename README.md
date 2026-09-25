@@ -333,7 +333,10 @@ Issues and PRs are genuinely welcome — especially around the open items above.
 
 ## 📄 License
 
-[MIT](LICENSE) — a permissive default for a research/portfolio project. Swap it for whatever fits your use case.
+This project is available for non-commercial research and educational
+purposes only.
+Commercial use and use by commercial entities are not permitted.
+See the [LICENSE](LICENSE) file for the full terms.
 
 ## 🙏 Author
 
