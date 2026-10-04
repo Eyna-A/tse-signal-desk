@@ -58,7 +58,7 @@ def _fix_geo_feature_stationarity(full_df: pd.DataFrame) -> pd.DataFrame:
     nonzero_mask = (full_df[geo_cols] != 0).any(axis=1)
 
     if not nonzero_mask.any():
-        logger.warning("⚠️ No non-zero geopolitical observations found. Check the worldmonitor module. "
+        logger.warning(" No non-zero geopolitical observations found. Check the worldmonitor module. "
                        "geo_data_available will be set to 0.0 for all rows.")
         full_df['geo_data_available'] = 0.0
         return full_df
@@ -75,14 +75,16 @@ def _fix_geo_feature_stationarity(full_df: pd.DataFrame) -> pd.DataFrame:
     n_backfilled = int(pretracking_mask.sum())
     if n_backfilled > 0:
         full_df.loc[pretracking_mask, 'geo_cii_score'] = observed_mean
-        logger.info(f"🩺 geo_cii_score: Filled {n_backfilled} rows prior to tracking start with mean value "
+        logger.info(f" geo_cii_score: Filled {n_backfilled} rows prior to tracking start with mean value "
                     f"({observed_mean:.2f}).")
 
     return full_df
 
 
 # Final feature set (20 features)
-FEATURE_COLS = [
+USE_GEO_FEATURES = os.environ.get("USE_GEO_FEATURES", "1") == "1"
+
+BASE_FEATURE_COLS = [
     'stock_return', 'volatility_20d', 'dollar_corr_20d',
     'rsi_14', 'macd_line', 'macd_signal', 'macd_hist', 'atr_14', 'drawdown_20d',
     'dist_ma20', 'dist_ma50', 'market_regime_dollar', 'beta_proxy', 'relative_dollar_value',
@@ -90,12 +92,22 @@ FEATURE_COLS = [
 
     'dollar_macro_trend',
     'days_since_last_capital_increase_scaled',
-
-    'geo_cii_score', 'geo_high_risk_flag', 'geo_data_available',
 ]
 
+GEO_FEATURE_COLS = [
+    'geo_cii_score',
+    'geo_high_risk_flag',
+    'geo_data_available',
+]
+
+FEATURE_COLS = BASE_FEATURE_COLS + (GEO_FEATURE_COLS if USE_GEO_FEATURES else [])
+
+logger.info(
+    f" Geopolitical features: {'ENABLED' if USE_GEO_FEATURES else 'DISABLED'}"
+)
+logger.info(f" Number of model features: {len(FEATURE_COLS)}")
+
 # Removed features from previous versions:
-# - capital_increase_count : high non-stationarity
 # - dollar_return_sign     : zero mutual information
 # - volume_ratio           : zero mutual information
 # - days_since_prev_row    : zero mutual information
@@ -104,7 +116,7 @@ FEATURE_COLS = [
 def apply_diagnostic_corrections(full_df: pd.DataFrame) -> pd.DataFrame:
     """Apply diagnostic corrections and feature stationarity adjustments."""
     if 'ticker_code' not in full_df.columns:
-        raise ValueError("❌ apply_diagnostic_corrections requires 'ticker_code' column.")
+        raise ValueError(" apply_diagnostic_corrections requires 'ticker_code' column.")
 
     full_df = full_df.sort_values(['ticker_code', 'jalali_date']).reset_index(drop=True)
 
@@ -147,7 +159,7 @@ def _relabel_cross_sectionally(full_df: pd.DataFrame) -> pd.DataFrame:
     """Relabel targets cross-sectionally by de-meaning margin against daily market mean."""
     required = {'future_stock_return_60d', 'future_market_return_60d', 'jalali_date'}
     if not required.issubset(full_df.columns):
-        logger.warning("⚠️ Raw future_*_60d columns missing for cross-sectional relabeling. "
+        logger.warning(" Raw future_*_60d columns missing for cross-sectional relabeling. "
                        "Original labels retained.")
         return full_df
 
@@ -167,7 +179,7 @@ def _relabel_cross_sectionally(full_df: pd.DataFrame) -> pd.DataFrame:
     valid_labels = raw_label[has_future.to_numpy()]
     if len(valid_labels) > 0:
         new_dist = pd.Series(valid_labels).value_counts(normalize=True).sort_index()
-        logger.info(f"🩺 New label distribution (cross-sectional demeaned daily): "
+        logger.info(f" New label distribution (cross-sectional demeaned daily): "
                     f"{new_dist.round(3).to_dict()}")
 
     return full_df
@@ -181,10 +193,10 @@ def load_and_combine_features():
     all_files = csv_files or parquet_files or excel_files
 
     if not all_files:
-        raise FileNotFoundError("❌ No feature files found.")
+        raise FileNotFoundError(" No feature files found.")
 
     file_ext = os.path.splitext(all_files[0])[1]
-    logger.info(f"📂 Loading {len(all_files)} feature files ({file_ext})...")
+    logger.info(f" Loading {len(all_files)} feature files ({file_ext})...")
 
     combined_list = []
     for f in all_files:
@@ -199,11 +211,11 @@ def load_and_combine_features():
 
     full_df = pd.concat(combined_list, ignore_index=True)
 
-    logger.info("🩺 Applying diagnostic corrections to features...")
+    logger.info(" Applying diagnostic corrections to features...")
     full_df = apply_diagnostic_corrections(full_df)
 
     if USE_CROSS_SECTIONAL_DEMEANED_LABEL:
-        logger.info("🩺 Relabeling cross-sectionally to mitigate macro-dominance...")
+        logger.info(" Relabeling cross-sectionally to mitigate macro-dominance...")
         full_df = _relabel_cross_sectionally(full_df)
 
     float_cols = full_df.select_dtypes(include=['float64']).columns
@@ -266,8 +278,8 @@ def train_lightgbm_with_purged_cv():
     y_full = train_val_set['label'].astype(int)
     dates_full = train_val_set['jalali_date']
 
-    logger.info(f"📊 Training dataset: {X_full.shape[0]} rows | Live dataset: {live_set.shape[0]} rows")
-    logger.info(f"📊 Overall dataset class distribution: {y_full.value_counts(normalize=True).sort_index().round(3).to_dict()}")
+    logger.info(f" Training dataset: {X_full.shape[0]} rows | Live dataset: {live_set.shape[0]} rows")
+    logger.info(f" Overall dataset class distribution: {y_full.value_counts(normalize=True).sort_index().round(3).to_dict()}")
 
     raw_class_weight_map, _ = _compute_dampened_class_weights(y_full)
 
@@ -275,7 +287,7 @@ def train_lightgbm_with_purged_cv():
     splits = purged_walk_forward_splits(unique_dates)
 
     if not splits:
-        raise RuntimeError("❌ No valid folds generated.")
+        raise RuntimeError(" No valid folds generated.")
 
     params = {
         'objective': 'multiclass',
@@ -313,7 +325,7 @@ def train_lightgbm_with_purged_cv():
         w_test = y_test.map(fold_dampened_map).to_numpy()
 
         fold_class_dist = y_train.value_counts(normalize=True).sort_index().to_dict()
-        logger.info(f"   Fold {fold_idx} train class distribution: "
+        logger.info(f"Fold {fold_idx} train class distribution: "
                     f"{ {k: round(v, 3) for k, v in fold_class_dist.items()} }")
 
         train_data = lgb.Dataset(X_train, label=y_train, weight=w_train)
@@ -332,7 +344,7 @@ def train_lightgbm_with_purged_cv():
         f1_macro = f1_score(y_test, pred_labels, average='macro')
         ordinal_dist = float(np.abs(pred_labels - y_test.to_numpy()).mean())
 
-        logger.info(f"🎯 Fold {fold_idx}: Acc={acc:.2%} | F1={f1_macro:.3f} | "
+        logger.info(f" Fold {fold_idx}: Acc={acc:.2%} | F1={f1_macro:.3f} | "
                     f"OrdinalDist={ordinal_dist:.3f} | best_iter={model.best_iteration}")
 
         models.append(model)
@@ -359,24 +371,77 @@ def train_lightgbm_with_purged_cv():
         unstable_features = imp_cv[(imp_mean > imp_mean.median()) & (imp_cv > 1.0)]
         if not unstable_features.empty:
             logger.warning(
-                "⚠️ Features with high gain but high variance across folds "
+                " Features with high gain but high variance across folds "
                 f"(suspected non-stationarity/leakage): {unstable_features.round(2).to_dict()}"
             )
 
-    healthy_iters = [m['best_iteration'] for m in fold_metrics if m['best_iteration'] > 5]
+
+    healthy_iters = [
+    m['best_iteration']
+    for m in fold_metrics
+    if m['best_iteration'] > 5
+]
+
+    if not healthy_iters:
+        raise RuntimeError(
+            "No healthy fold found: all best_iteration values <= 5. "
+            "Training stopped because no reliable boosting depth was identified."
+        )
+
+    median_best_iter = int(np.median(healthy_iters))
+
+    logger.info(
+        f"Training final model with {median_best_iter} trees "
+        f"(median best_iteration across healthy folds)..."
+    )
+
+    final_sample_weight_full = y_full.map(raw_class_weight_map).to_numpy()
+
+    if USE_RECENCY_WEIGHTING:
+        sorted_unique_dates = np.sort(dates_full.unique())
+        date_rank_map = {d: i for i, d in enumerate(sorted_unique_dates)}
+        date_ranks = dates_full.map(date_rank_map).to_numpy()
+        max_rank = date_ranks.max()
+
+        recency_weight = np.exp(
+            -np.log(2) * (max_rank - date_ranks) / RECENCY_HALF_LIFE_DATES
+        )
+
+        final_sample_weight_full = (
+            final_sample_weight_full * recency_weight
+        )
+
+        logger.info(
+            f"Recency weighting enabled "
+            f"(half-life = {RECENCY_HALF_LIFE_DATES} trading dates)."
+        )
+
+    final_data = lgb.Dataset(
+        X_full,
+        label=y_full,
+        weight=final_sample_weight_full
+    )
+
+    final_model = lgb.train(
+        params,
+        final_data,
+        num_boost_round=median_best_iter
+    )
+
+    """healthy_iters = [m['best_iteration'] for m in fold_metrics if m['best_iteration'] > 5]
     avg_best_iter = int(np.median(healthy_iters)) if healthy_iters else 100
     if not healthy_iters:
         logger.warning(
-            "🚨 No fold achieved best_iteration > 5. Signal is indistinguishable from noise. "
+            " No fold achieved best_iteration > 5. Signal is indistinguishable from noise. "
             "Resolve this before architectural changes."
         )
     else:
         n_weak = sum(1 for m in fold_metrics if m['best_iteration'] <= 5)
         if n_weak > 0:
-            logger.warning(f"⚠️ {n_weak} out of {len(fold_metrics)} folds had best_iteration <= 5 "
+            logger.warning(f" {n_weak} out of {len(fold_metrics)} folds had best_iteration <= 5 "
                            "(weak signal in specific regimes).")
 
-    logger.info(f"🔁 Training final model with {avg_best_iter} trees (Ideal median)...")
+    logger.info(f" Training final model with {avg_best_iter} trees (Ideal median)...")
 
     final_sample_weight_full = y_full.map(raw_class_weight_map).to_numpy()
 
@@ -387,10 +452,10 @@ def train_lightgbm_with_purged_cv():
         max_rank = date_ranks.max()
         recency_weight = np.exp(-np.log(2) * (max_rank - date_ranks) / RECENCY_HALF_LIFE_DATES)
         final_sample_weight_full = final_sample_weight_full * recency_weight
-        logger.info(f"⏳ Recency weighting enabled (half-life = {RECENCY_HALF_LIFE_DATES} trading dates).")
+        logger.info(f" Recency weighting enabled (half-life = {RECENCY_HALF_LIFE_DATES} trading dates).")
 
     final_data = lgb.Dataset(X_full, label=y_full, weight=final_sample_weight_full)
-    final_model = lgb.train(params, final_data, num_boost_round=max(avg_best_iter, 50))
+    final_model = lgb.train(params, final_data, num_boost_round=max(avg_best_iter, 50))"""
 
     model_path = os.path.join(MODEL_DIR, "lgb_robo_advisor.txt")
     final_model.save_model(model_path)
@@ -409,7 +474,7 @@ def train_lightgbm_with_purged_cv():
         'num_features': len(FEATURE_COLS),
         'feature_cols': FEATURE_COLS,
         'train_rows': len(X_full),
-        'avg_best_iter': avg_best_iter,
+        'median_best_iter': median_best_iter,
         'params': params,
         'use_recency_weighting': USE_RECENCY_WEIGHTING,
         'recency_half_life_dates': RECENCY_HALF_LIFE_DATES,
@@ -425,7 +490,7 @@ def train_lightgbm_with_purged_cv():
         'importance': final_model.feature_importance(importance_type='gain')
     }).sort_values('importance', ascending=False)
 
-    logger.info(f"\n🏆 Top 10 Feature Importances:\n{importance.head(10).to_string(index=False)}")
+    logger.info(f"\n Top 10 Feature Importances:\n{importance.head(10).to_string(index=False)}")
     return final_model, metrics_df
 
 
