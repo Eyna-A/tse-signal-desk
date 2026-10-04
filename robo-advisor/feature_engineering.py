@@ -6,7 +6,7 @@ import warnings
 import pandas as pd
 import numpy as np
 
-from geopolitical_features import load_geo_feature_history
+from gdelt_geo_features import load_geo_feature_history
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger("feature_engineering")
@@ -14,6 +14,7 @@ logger = logging.getLogger("feature_engineering")
 DB_NAME = "tsetmc_market_data.db"
 FEATURES_DIR = "ai_features_outputs"
 LOOKAHEAD_DAYS = 60
+GEO_FFILL_LIMIT_ROWS = 10  # max trading rows to carry a geo value forward
 
 # ─── Iranian Market Thresholds ───
 MAX_DAILY_RETURN_THRESHOLD = 0.30  # 30% — Returns above this are likely due to capital increases/halts
@@ -257,7 +258,13 @@ def calculate_ai_features(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     geo_history = load_geo_feature_history()
     geo_cols = ['geo_cii_score', 'geo_conflict_event_count_7d', 'geo_high_risk_flag']
     if not geo_history.empty:
+        geo_history = geo_history.copy()
+        geo_history['jalali_date'] = geo_history['jalali_date'].astype('int64')
         features_df = features_df.merge(geo_history, on='jalali_date', how='left')
+        # Carry the last known value across short gaps / the newest trading days, instead of
+        # writing 0.0 into live rows (0 is outside the training distribution of geo_cii_score).
+        present = [c for c in geo_cols if c in features_df.columns]
+        features_df[present] = features_df[present].ffill(limit=GEO_FFILL_LIMIT_ROWS)
     for col in geo_cols:
         if col not in features_df.columns:
             features_df[col] = 0.0

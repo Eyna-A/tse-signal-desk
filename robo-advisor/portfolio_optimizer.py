@@ -207,7 +207,7 @@ def optimize_portfolio(capital: float, risk_appetite: str, time_horizon: str):
     if time_horizon == 'short':
         max_equity_ratio = min(max_equity_ratio, 0.40)
 
-    from geopolitical_features import get_current_risk_brake
+    from gdelt_geo_features import get_current_risk_brake
     max_equity_ratio = get_current_risk_brake(max_equity_ratio)
 
     num_assets = len(tickers)

@@ -46,3 +46,6 @@ Thumbs.db
 # Data & JSON files
 *.csv
 *.json
+
+*.db
+New Text Document.txt

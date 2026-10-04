@@ -13,8 +13,13 @@ logger = logging.getLogger("geopolitical_features")
 
 BASE_DIR = Path(__file__).resolve().parent
 GEO_DB_PATH = str(BASE_DIR / "geo_signals.db")
-MACRO_DB_PATH = str(BASE_DIR / "macro_data.db")
+MARKET_DB_PATH = str(BASE_DIR / "tsetmc_market_data.db")  # the DB data_pipeline.py actually writes
 COUNTRY_CODE = "IR"
+
+# "gdelt" (default, free, same definition as the training history) or "worldmonitor" (paid key).
+# Do NOT mix sources on the same geo_signals.db: the two scores are on different definitions and
+# mixing them creates train/serve skew.
+GEO_SOURCE = os.environ.get("GEO_SOURCE", "gdelt").lower()
 
 WORLDMONITOR_API_KEY_ENV_VAR = "WORLDMONITOR_API_KEY"
 
@@ -68,17 +73,19 @@ def _get_sdk_client():
 
 
 def _get_latest_jalali_date() -> Optional[int]:
-    """Returns the latest available jalali_date in macro_data.db as 'today'."""
-    if not os.path.exists(MACRO_DB_PATH):
-        logger.warning("⚠️ macro_data.db not found; cannot determine 'today' for geopolitical features.")
+    """Latest trading jalali_date in tsetmc_market_data.db (treated as 'today')."""
+    if not os.path.exists(MARKET_DB_PATH):
+        logger.warning("⚠️ tsetmc_market_data.db not found; cannot determine 'today' for geopolitical features.")
         return None
     try:
-        conn = sqlite3.connect(MACRO_DB_PATH)
-        row = conn.execute("SELECT MAX(jalali_date) FROM dollar_history").fetchone()
-        conn.close()
+        conn = sqlite3.connect(MARKET_DB_PATH)
+        try:
+            row = conn.execute("SELECT MAX(jalali_date) FROM daily_prices").fetchone()
+        finally:
+            conn.close()
         return int(row[0]) if row and row[0] is not None else None
     except sqlite3.Error as e:
-        logger.warning(f"⚠️ Error reading macro_data.db: {e}")
+        logger.warning(f"⚠️ Error reading tsetmc_market_data.db: {e}")
         return None
 
 
@@ -161,7 +168,19 @@ def fetch_today_geo_snapshot() -> Optional[dict]:
 
 
 def record_daily_snapshot() -> Optional[dict]:
-    """Records today's geopolitical snapshot into the database."""
+    """Refreshes geo_signals.db using the configured GEO_SOURCE."""
+    if GEO_SOURCE == "gdelt":
+        try:
+            from gdelt_geo_features import update_geo_signals
+            return update_geo_signals()      # incremental: only downloads missing days
+        except Exception as e:               # fail-open: never block live predictions
+            logger.warning(f"⚠️ GDELT geo update failed ({e}); using the existing geo_signals.db.")
+            return None
+    return _record_worldmonitor_snapshot()
+
+
+def _record_worldmonitor_snapshot() -> Optional[dict]:
+    """Legacy path: records today's WorldMonitor CII snapshot (requires API key)."""
     jalali_date = _get_latest_jalali_date()
     if jalali_date is None:
         return None
@@ -219,16 +238,23 @@ def get_current_risk_brake(default_max_equity_ratio: float) -> float:
     try:
         conn = sqlite3.connect(GEO_DB_PATH)
         row = conn.execute(
-            "SELECT geo_cii_score FROM geo_signals WHERE jalali_date = ?", (jalali_date,)
+            "SELECT jalali_date, geo_cii_score FROM geo_signals "
+            "WHERE jalali_date <= ? ORDER BY jalali_date DESC LIMIT 1", (jalali_date,)
         ).fetchone()
         conn.close()
     except sqlite3.Error:
         return default_max_equity_ratio
 
-    if not row or row[0] is None:
+    if not row or row[1] is None:
         return default_max_equity_ratio
 
-    cii_score = row[0]
+    def _ord(d: int) -> int:   # approximate ordinal, same convention as live_predictor
+        return (d // 10000) * 360 + ((d // 100) % 100) * 30 + d % 100
+    if _ord(jalali_date) - _ord(int(row[0])) > 10:
+        logger.warning(f"⚠️ Latest geopolitical row ({row[0]}) is stale vs {jalali_date}; risk brake not applied.")
+        return default_max_equity_ratio
+
+    cii_score = row[1]
     if cii_score >= CII_CRITICAL_THRESHOLD:
         logger.warning(f"🚨 Critical CII level ({cii_score:.1f}); maximum equity allocation capped at 20%.")
         return min(default_max_equity_ratio, 0.20)

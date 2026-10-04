@@ -8,7 +8,7 @@ import numpy as np
 import lightgbm as lgb
 
 from train_model import FEATURE_COLS, apply_diagnostic_corrections  # Single source of truth to avoid train/serve skew
-from geopolitical_features import record_daily_snapshot
+from gdelt_geo_features import record_daily_snapshot
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 logger = logging.getLogger("live_predictor")
