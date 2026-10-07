@@ -14,7 +14,7 @@ logger = logging.getLogger("feature_engineering")
 DB_NAME = "tsetmc_market_data.db"
 FEATURES_DIR = "ai_features_outputs"
 LOOKAHEAD_DAYS = 60
-GEO_FFILL_LIMIT_ROWS = 10  # max trading rows to carry a geo value forward
+GEO_MAX_STALE_DAYS = 10  # max age (approx. days) of a geo value that may be carried to a later date
 
 # ─── Iranian Market Thresholds ───
 MAX_DAILY_RETURN_THRESHOLD = 0.30  # 30% — Returns above this are likely due to capital increases/halts
@@ -258,13 +258,25 @@ def calculate_ai_features(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     geo_history = load_geo_feature_history()
     geo_cols = ['geo_cii_score', 'geo_conflict_event_count_7d', 'geo_high_risk_flag']
     if not geo_history.empty:
-        geo_history = geo_history.copy()
+        # As-of join on the DATE: every ticker gets exactly the same geo values on the same date
+        # (a per-row ffill gave different tickers different values wherever geo history had gaps).
+        # Values older than GEO_MAX_STALE_DAYS (approx. days) are dropped instead of carried forward.
+        geo_history = geo_history.sort_values('jalali_date').copy()
         geo_history['jalali_date'] = geo_history['jalali_date'].astype('int64')
-        features_df = features_df.merge(geo_history, on='jalali_date', how='left')
-        # Carry the last known value across short gaps / the newest trading days, instead of
-        # writing 0.0 into live rows (0 is outside the training distribution of geo_cii_score).
+        geo_history['geo_source_date'] = geo_history['jalali_date']
+        if not features_df['jalali_date'].is_monotonic_increasing:
+            features_df = features_df.sort_values('jalali_date').reset_index(drop=True)
+        features_df['jalali_date'] = features_df['jalali_date'].astype('int64')
+        features_df = pd.merge_asof(features_df, geo_history, on='jalali_date', direction='backward')
+
+        def _approx_ord(d):
+            return (d // 10000) * 360 + ((d // 100) % 100) * 30 + (d % 100)
+
+        age = _approx_ord(features_df['jalali_date']) - _approx_ord(features_df['geo_source_date'].fillna(0).astype('int64'))
+        stale = features_df['geo_source_date'].isna() | (age > GEO_MAX_STALE_DAYS)
         present = [c for c in geo_cols if c in features_df.columns]
-        features_df[present] = features_df[present].ffill(limit=GEO_FFILL_LIMIT_ROWS)
+        features_df.loc[stale, present] = np.nan
+        features_df = features_df.drop(columns=['geo_source_date'])
     for col in geo_cols:
         if col not in features_df.columns:
             features_df[col] = 0.0

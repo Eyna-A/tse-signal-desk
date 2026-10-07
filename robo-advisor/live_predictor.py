@@ -39,7 +39,7 @@ def load_latest_live_data():
     all_files = csv_files or parquet_files
 
     if not all_files:
-        raise FileNotFoundError("❌ No feature files found. Please run feature_engineering.py first.")
+        raise FileNotFoundError(" No feature files found. Please run feature_engineering.py first.")
 
     live_rows = []
     for f in all_files:
@@ -49,7 +49,7 @@ def load_latest_live_data():
 
         if len(df) < MIN_HISTORY_ROWS_FOR_STABLE_FEATURES:
             logger.warning(
-                f"⚠️ {ticker}: Only {len(df)} historical rows available (< "
+                f" {ticker}: Only {len(df)} historical rows available (< "
                 f"{MIN_HISTORY_ROWS_FOR_STABLE_FEATURES}); stationary rolling features "
                 "will be filled with neutral values."
             )
@@ -71,21 +71,21 @@ def load_latest_live_data():
         live_rows.append(latest_day)
 
     if not live_rows:
-        raise ValueError("⚠️ No valid live data found for prediction!")
+        raise ValueError(" No valid live data found for prediction!")
 
     return pd.concat(live_rows, ignore_index=True)
 
 
 def generate_live_predictions(output_path=OUTPUT_PATH):
     if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(f"❌ Model not found at '{MODEL_PATH}'! Run train_model.py first.")
+        raise FileNotFoundError(f" Model not found at '{MODEL_PATH}'! Run train_model.py first.")
 
     record_daily_snapshot()
 
-    logger.info("🧠 Loading LightGBM model...")
+    logger.info(" Loading LightGBM model...")
     model = lgb.Booster(model_file=MODEL_PATH)
 
-    logger.info("📊 Extracting latest market state...")
+    logger.info(" Extracting latest market state...")
     live_df = load_latest_live_data()
 
     X_live = live_df[FEATURE_COLS]
@@ -107,7 +107,7 @@ def generate_live_predictions(output_path=OUTPUT_PATH):
 
     halted = results[results['Days Since Prev Trade'] > 10]
     if not halted.empty:
-        logger.warning(f"⚠️ The following tickers reopened after a trading halt; 'Return (%)' "
+        logger.warning(f" The following tickers reopened after a trading halt; 'Return (%)' "
                        f"reflects multi-day cumulative return, not single-day return: "
                        f"{halted['Ticker'].tolist()}")
 
@@ -118,7 +118,7 @@ def generate_live_predictions(output_path=OUTPUT_PATH):
 
     if is_stale.any():
         stale_tickers = results.loc[is_stale, 'Ticker'].tolist()
-        logger.warning(f"⛔ The following tickers have data older than {STALE_DATA_THRESHOLD_DAYS} days "
+        logger.warning(f" The following tickers have data older than {STALE_DATA_THRESHOLD_DAYS} days "
                        f"(likely halted/suspended) and were excluded from buy signals: {stale_tickers}")
         preds_proba[is_stale.to_numpy(), 2] = 0.0
         preds_proba[is_stale.to_numpy(), 0] = 1.0
@@ -130,17 +130,17 @@ def generate_live_predictions(output_path=OUTPUT_PATH):
     )
 
     best_class = np.argmax(preds_proba, axis=1)
-    class_map = {0: "❌ No Buy / Sell", 1: "⚖️ Hold / Market Performing", 2: "🔥 Buy Signal (Strong Growth)"}
+    class_map = {0: " No Buy / Sell", 1: " Hold / Market Performing", 2: " Buy Signal (Strong Growth)"}
     results['System Signal'] = [class_map[c] for c in best_class]
-    results.loc[is_stale, 'System Signal'] = "⛔ Stale Data / Likely Halted - Do Not Trade"
+    results.loc[is_stale, 'System Signal'] = " Stale Data / Likely Halted - Do Not Trade"
 
     ranking_table = results.sort_values(by='Alpha Score', ascending=False).reset_index(drop=True)
 
-    logger.info(f"\n🏆 Ticker Ranking:\n{ranking_table.to_string(index=False)}")
+    logger.info(f"\n Ticker Ranking:\n{ranking_table.to_string(index=False)}")
 
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     ranking_table.to_excel(output_path, index=False)
-    logger.info(f"💾 Output saved to '{output_path}'.")
+    logger.info(f" Output saved to '{output_path}'.")
 
     return ranking_table
 
